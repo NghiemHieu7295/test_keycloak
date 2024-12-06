@@ -1,0 +1,66 @@
+name: my-first-microservice-system
+
+services:
+  keycloak-db:
+    image: postgres:latest
+    ports:
+      - "25432:5432"
+    networks:
+      - first_system
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${KEYCLOAK_DB_NAME}
+      - POSTGRES_USER=${KEYCLOAK_DB_USER_NAME}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/keycloak_db_password
+    secrets:
+      - keycloak_db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER_NAME} -d ${KEYCLOAK_DB_NAME}"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+  
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.0
+    ports:
+      - "8180:8080"
+      - "8183:8443"
+    networks:
+      - first_system
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak.local.key:/opt/keycloak/bin/keycloak.local.key
+      - ./keycloak.local.crt:/opt/keycloak/bin/keycloak.local.crt
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USER_NAME}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - KC_DB=postgres
+      - KC_DB_URL_HOST=keycloak-db
+      - KC_DB_URL_PORT=5432
+      - KC_DB_URL_DATABASE=${KEYCLOAK_DB_NAME}
+      - KC_DB_USERNAME=${KEYCLOAK_DB_USER_NAME}
+      - KC_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
+      - KC_DB_SCHEMA=public
+      - KC_HOSTNAME=https://localhost:8183
+      - KC_HOSTNAME_STRICT=false
+      - KC_HTTPS_CERTIFICATE_FILE=/opt/keycloak/bin/keycloak.local.crt
+      - KC_HTTPS_CERTIFICATE_KEY_FILE=/opt/keycloak/bin/keycloak.local.key
+    entrypoint: ["/opt/keycloak/bin/kc.sh", "start"]
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+
+secrets:
+  keycloak_db_password:
+    file: keycloak_db_password.txt
+
+networks:
+  first_system:
+
+volumes:
+  keycloak_db_data:
+  keycloak_data:
+  
+    
